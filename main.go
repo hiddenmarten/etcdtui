@@ -26,6 +26,14 @@ func main() {
 	// Create a list to display the keys
 	list := tview.NewList().ShowSecondaryText(false)
 
+	// Create a TextView to display the value of the selected key
+	valueView := tview.NewTextView().SetDynamicColors(true).SetWrap(true)
+
+	// Create a Flex layout to hold the list and value view side-by-side
+	flex := tview.NewFlex().
+		AddItem(list, 0, 1, true).
+		AddItem(valueView, 0, 2, false)
+
 	// Function to fetch keys from etcd and update the list
 	updateList := func() {
 		var resp *clientv3.GetResponse
@@ -39,7 +47,24 @@ func main() {
 
 		list.Clear()
 		for _, kv := range resp.Kvs {
-			list.AddItem(string(kv.Key), "", 0, nil)
+			key := string(kv.Key)
+			list.AddItem(key, "", 0, func() {
+				// Fetch the value for the selected key
+				ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+				resp, err = cli.Get(ctx, key)
+				cancel()
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				if len(resp.Kvs) > 0 {
+					valueView.SetText(string(resp.Kvs[0].Value))
+				} else {
+					valueView.SetText("No value found")
+				}
+				// Set focus to the value view
+				app.SetFocus(valueView)
+			})
 		}
 	}
 
@@ -52,10 +77,6 @@ func main() {
 			app.QueueUpdateDraw(updateList)
 		}
 	}()
-
-	// Set up the application layout
-	flex := tview.NewFlex().
-		AddItem(list, 0, 1, true)
 
 	// Set the root and run the application
 	if err = app.SetRoot(flex, true).Run(); err != nil {
