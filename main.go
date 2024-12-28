@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/gdamore/tcell/v2"
 	"log"
 	"strings"
 	"time"
@@ -83,15 +84,21 @@ func main() {
 		}
 	}
 
-	// Set up a ticker to update the tree view every 2 seconds
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	// Update the tree view once at the start
+	updateTreeView()
 
-	go func() {
-		for range ticker.C {
-			app.QueueUpdateDraw(updateTreeView)
+	// Add key event handler to switch focus between TreeView and TextView
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			if app.GetFocus() == treeView {
+				app.SetFocus(valueView)
+			} else {
+				app.SetFocus(treeView)
+			}
 		}
-	}()
+		return event
+	})
 
 	// Set the root and run the application
 	err = app.SetRoot(flex, true).Run()
