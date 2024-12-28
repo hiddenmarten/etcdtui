@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/rivo/tview"
@@ -23,19 +24,47 @@ func main() {
 	// Create a new tview application
 	app := tview.NewApplication()
 
-	// Create a list to display the keys
-	list := tview.NewList().ShowSecondaryText(false)
+	// Create a TreeView to display the keys
+	treeView := tview.NewTreeView().
+		SetRoot(tview.NewTreeNode("Root")).
+		SetCurrentNode(tview.NewTreeNode("Root"))
 
 	// Create a TextView to display the value of the selected key
 	valueView := tview.NewTextView().SetDynamicColors(true).SetWrap(true)
 
-	// Create a Flex layout to hold the list and value view side-by-side
+	// Create a Flex layout to hold the tree view and value view side-by-side
 	flex := tview.NewFlex().
-		AddItem(list, 0, 1, true).
+		AddItem(treeView, 0, 1, true).
 		AddItem(valueView, 0, 2, false)
 
-	// Function to fetch keys from etcd and update the list
-	updateList := func() {
+	// Function to add a key to the tree
+	addKeyToTree := func(root *tview.TreeNode, key string, value []byte) {
+		parts := strings.Split(key, "/")
+		currentNode := root
+		for _, part := range parts {
+			found := false
+			for _, child := range currentNode.GetChildren() {
+				if child.GetText() == part {
+					currentNode = child
+					found = true
+					break
+				}
+			}
+			if !found {
+				newNode := tview.NewTreeNode(part)
+				currentNode.AddChild(newNode)
+				currentNode = newNode
+			}
+		}
+		currentNode.SetReference(value)
+		currentNode.SetSelectedFunc(func() {
+			valueView.SetText(string(value))
+			app.SetFocus(valueView)
+		})
+	}
+
+	// Function to fetch keys from etcd and update the tree view
+	updateTreeView := func() {
 		var resp *clientv3.GetResponse
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		resp, err = cli.Get(ctx, "", clientv3.WithPrefix())
@@ -45,41 +74,28 @@ func main() {
 			return
 		}
 
-		list.Clear()
+		rootNode := tview.NewTreeNode("Root")
+		treeView.SetRoot(rootNode)
+
 		for _, kv := range resp.Kvs {
 			key := string(kv.Key)
-			list.AddItem(key, "", 0, func() {
-				// Fetch the value for the selected key
-				ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-				resp, err = cli.Get(ctx, key)
-				cancel()
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				if len(resp.Kvs) > 0 {
-					valueView.SetText(string(resp.Kvs[0].Value))
-				} else {
-					valueView.SetText("No value found")
-				}
-				// Set focus to the value view
-				app.SetFocus(valueView)
-			})
+			addKeyToTree(rootNode, key, kv.Value)
 		}
 	}
 
-	// Set up a ticker to update the list every 2 seconds
+	// Set up a ticker to update the tree view every 2 seconds
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	go func() {
 		for range ticker.C {
-			app.QueueUpdateDraw(updateList)
+			app.QueueUpdateDraw(updateTreeView)
 		}
 	}()
 
 	// Set the root and run the application
-	if err = app.SetRoot(flex, true).Run(); err != nil {
+	err = app.SetRoot(flex, true).Run()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
