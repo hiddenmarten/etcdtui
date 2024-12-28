@@ -84,9 +84,6 @@ func main() {
 		}
 	}
 
-	// Update the tree view once at the start
-	updateTreeView()
-
 	// Add key event handler to switch focus between TreeView and TextView
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -94,6 +91,7 @@ func main() {
 			if app.GetFocus() == treeView {
 				app.SetFocus(valueView)
 			} else {
+				updateTreeView()
 				app.SetFocus(treeView)
 			}
 		}
