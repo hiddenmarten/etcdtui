@@ -27,3 +27,6 @@ go.work.sum
 # IDE files
 .idea/
 .vscode/
+
+# Default etcd files
+default.etcd/

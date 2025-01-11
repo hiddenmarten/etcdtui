@@ -31,7 +31,9 @@ func main() {
 		SetCurrentNode(tview.NewTreeNode("Root"))
 
 	// Create a TextView to display the value of the selected key
-	valueView := tview.NewTextView().SetDynamicColors(true).SetWrap(true)
+	valueView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetWrap(true)
 
 	// Create a Flex layout to hold the tree view and value view side-by-side
 	flex := tview.NewFlex().
@@ -59,7 +61,7 @@ func main() {
 		}
 		currentNode.SetReference(value)
 		currentNode.SetSelectedFunc(func() {
-			valueView.SetText(string(value))
+			valueView.SetText(string(value)).SetBorder(true).SetTitle("Value")
 			app.SetFocus(valueView)
 		})
 	}
@@ -76,7 +78,7 @@ func main() {
 		}
 
 		rootNode := tview.NewTreeNode("Root")
-		treeView.SetRoot(rootNode)
+		treeView.SetRoot(rootNode).SetBorder(true).SetTitle("Keys")
 
 		for _, kv := range resp.Kvs {
 			key := string(kv.Key)
@@ -84,6 +86,10 @@ func main() {
 		}
 	}
 
+	// Init the value view empty
+	valueView.SetText("").SetBorder(true).SetTitle("Value")
+
+	// Update the tree view
 	updateTreeView()
 
 	// Add key event handler to switch focus between TreeView and TextView
