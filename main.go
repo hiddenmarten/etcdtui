@@ -78,21 +78,14 @@ func main() {
 }
 
 func NewEtcdClient() (*clientv3.Client, error) {
-	endpoints := strings.Split(os.Getenv("ETCD_ENDPOINTS"), ",")
+	endpoints := strings.Split(os.Getenv("ETCDCTL_ENDPOINTS"), ",")
 	if len(endpoints) == 0 || endpoints[0] == "" {
 		endpoints = []string{"localhost:2379"} // Default if not set
 	}
 
-	timeout := 5 * time.Second
-	if timeoutStr := os.Getenv("ETCD_DIAL_TIMEOUT"); timeoutStr != "" {
-		if t, err := time.ParseDuration(timeoutStr); err == nil {
-			timeout = t
-		}
-	}
-
 	return clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
-		DialTimeout: timeout,
+		DialTimeout: 5 * time.Second,
 	})
 }
 
