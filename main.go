@@ -16,11 +16,13 @@ var (
 	app       *tview.Application
 	keysView  *tview.TreeView
 	valueView *tview.TextView
+	cli       *clientv3.Client
 )
 
 func main() {
 	// Create an etcd client
-	cli, err := NewEtcdClient()
+	var err error
+	cli, err = NewEtcdClient()
 	defer cli.Close()
 
 	// Create a new tview application
@@ -43,14 +45,7 @@ func main() {
 
 	// Init the value view empty
 	updateValueView("")
-
-	// Update the tree view
-	var resp *clientv3.GetResponse
-	resp, err = getEtcdData(cli)
-	if err != nil {
-		log.Fatal(err)
-	}
-	updateTreeView(resp)
+	updateKeysView()
 
 	// Add key event handler to switch focus between TreeView and TextView
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -59,11 +54,7 @@ func main() {
 			if app.GetFocus() == keysView {
 				app.SetFocus(valueView)
 			} else {
-				resp, err = getEtcdData(cli)
-				if err != nil {
-					log.Fatal(err)
-				}
-				updateTreeView(resp)
+				updateKeysView()
 				app.SetFocus(keysView)
 			}
 		}
@@ -89,7 +80,7 @@ func NewEtcdClient() (*clientv3.Client, error) {
 	})
 }
 
-func addKeyToTree(root *tview.TreeNode, key string, value []byte) {
+func addKeyToTree(root *tview.TreeNode, key string) {
 	parts := strings.Split(key, "/")
 	currentNode := root
 	for _, part := range parts {
@@ -107,34 +98,66 @@ func addKeyToTree(root *tview.TreeNode, key string, value []byte) {
 			currentNode = newNode
 		}
 	}
-	currentNode.SetReference(value)
-	currentNode.SetSelectedFunc(func() {
-		updateValueView(string(value))
-		app.SetFocus(valueView)
-	})
+
+	// Set the selected function to update the value view
+	currentNode.SetSelectedFunc(selectNode(currentNode, key))
 }
 
-func getEtcdData(cli *clientv3.Client) (*clientv3.GetResponse, error) {
+func getEtcdKeys() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	resp, err := cli.Get(ctx, "", clientv3.WithPrefix())
+	resp, err := cli.Get(ctx, "", clientv3.WithPrefix(), clientv3.WithKeysOnly())
 	cancel()
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+	keys := make([]string, 0)
+	for _, kv := range resp.Kvs {
+		keys = append(keys, string(kv.Key))
+	}
+	return keys, nil
 }
 
-func updateTreeView(resp *clientv3.GetResponse) {
+func getEtcdValue(key string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	resp, err := cli.Get(ctx, key)
+	cancel()
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Kvs) == 0 {
+		return "", nil
+	}
+	return string(resp.Kvs[0].Value), nil
+}
 
+func updateKeysView() {
+	// Get the keys from etcd
+	keys, err := getEtcdKeys()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Update the tree view
 	rootNode := tview.NewTreeNode("Root")
 	keysView.SetRoot(rootNode).SetBorder(true).SetTitle("Keys")
-
-	for _, kv := range resp.Kvs {
-		key := string(kv.Key)
-		addKeyToTree(rootNode, key, kv.Value)
+	for _, key := range keys {
+		addKeyToTree(rootNode, key)
 	}
+
 }
 
 func updateValueView(text string) {
 	valueView.SetText(text).SetBorder(true).SetTitle("Value")
+}
+
+func selectNode(node *tview.TreeNode, key string) func() {
+	return func() {
+		value, err := getEtcdValue(key)
+		if err != nil {
+			log.Fatal(err)
+		}
+		node.SetReference(value)
+		updateValueView(value)
+		app.SetFocus(valueView)
+	}
 }
