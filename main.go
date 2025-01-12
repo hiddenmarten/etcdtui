@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gdamore/tcell/v2"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -19,13 +20,7 @@ var (
 
 func main() {
 	// Create an etcd client
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{"localhost:2379"},
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+	cli, err := NewEtcdClient()
 	defer cli.Close()
 
 	// Create a new tview application
@@ -80,6 +75,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func NewEtcdClient() (*clientv3.Client, error) {
+	endpoints := strings.Split(os.Getenv("ETCD_ENDPOINTS"), ",")
+	if len(endpoints) == 0 || endpoints[0] == "" {
+		endpoints = []string{"localhost:2379"} // Default if not set
+	}
+
+	timeout := 5 * time.Second
+	if timeoutStr := os.Getenv("ETCD_DIAL_TIMEOUT"); timeoutStr != "" {
+		if t, err := time.ParseDuration(timeoutStr); err == nil {
+			timeout = t
+		}
+	}
+
+	return clientv3.New(clientv3.Config{
+		Endpoints:   endpoints,
+		DialTimeout: timeout,
+	})
 }
 
 func addKeyToTree(root *tview.TreeNode, key string, value []byte) {
