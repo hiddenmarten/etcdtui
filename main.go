@@ -22,7 +22,7 @@ var (
 func main() {
 	// Create an etcd client
 	var err error
-	cli, err = NewEtcdClient()
+	cli, err = newEtcdClient()
 	defer cli.Close()
 
 	// Create a new tview application
@@ -43,23 +43,12 @@ func main() {
 		AddItem(keysView, 0, 1, true).
 		AddItem(valueView, 0, 2, false)
 
-	// Init the value view empty
+	// Init the value view empty and update the keys view
 	updateValueView("")
 	updateKeysView()
 
 	// Add key event handler to switch focus between TreeView and TextView
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTab:
-			if app.GetFocus() == keysView {
-				app.SetFocus(valueView)
-			} else {
-				updateKeysView()
-				app.SetFocus(keysView)
-			}
-		}
-		return event
-	})
+	app.SetInputCapture(switchOnTab)
 
 	// Set the root and run the application
 	err = app.SetRoot(flex, true).Run()
@@ -68,7 +57,7 @@ func main() {
 	}
 }
 
-func NewEtcdClient() (*clientv3.Client, error) {
+func newEtcdClient() (*clientv3.Client, error) {
 	endpoints := strings.Split(os.Getenv("ETCDCTL_ENDPOINTS"), ",")
 	if len(endpoints) == 0 || endpoints[0] == "" {
 		endpoints = []string{"localhost:2379"} // Default if not set
@@ -160,4 +149,17 @@ func selectNode(node *tview.TreeNode, key string) func() {
 		updateValueView(value)
 		app.SetFocus(valueView)
 	}
+}
+
+func switchOnTab(event *tcell.EventKey) *tcell.EventKey {
+	switch event.Key() {
+	case tcell.KeyTab:
+		if app.GetFocus() == keysView {
+			app.SetFocus(valueView)
+		} else {
+			updateKeysView()
+			app.SetFocus(keysView)
+		}
+	}
+	return event
 }
