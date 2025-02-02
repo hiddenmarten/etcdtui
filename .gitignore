@@ -30,3 +30,4 @@ go.work.sum
 
 # Default etcd files
 default.etcd/
+etcdtui
